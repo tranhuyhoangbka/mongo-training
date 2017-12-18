@@ -1,0 +1,404 @@
+1, connect to mongodb
+$ mongo
+$ use book
+$ mongo book
+$ mongo 192.168.1.100/book
+$ mongo db.myserver.com/book
+$ mongo 192.168.1.100:9999/book
+
+2, Thêm 1 document tới 1 collection (table)
+
+db.shelf.save( { name: 'Gautam Rege', passion : [ 'Ruby', 'MongoDB']})
+
+3, Lấy ra 10 documents trong 1 collection
+
+   db.shelf.find()
+
+4, Find theo một field:
+
+  db.shelf.find({name: 'hoang'})
+
+5, Find theo một field dùng regex
+
+  db.shelf.find({name: /ho/})
+  db.shelf.find({name: /ho/i})
+
+6, Xóa document
+- Xóa cả collection
+
+  db.shelf.remove({})
+
+- Xóa document thỏa mãn đk
+  
+  db.shelf.remove({name: 'hoang'})
+
+7, export data 
+
+mongoexport -d test -c shelf
+mongoexport -d test -c shelf -f name,passion --csv -o test.csv
+
+8, import data 
+https://raw.githubusercontent.com/mongodb/docs-assets/primer-dataset/primer-dataset.json
+
+mongoimport --db test --collection restaurants --drop --file ~/downloads/primer-dataset.json
+
+
+9, Backup database
+
+https://docs.mongodb.com/manual/tutorial/backup-and-restore-tools/
+
+mongodump -dtest
+
+sẽ tạo một thư mục dump trong thư mục hiện tại chứa các file backoup 
+
+10, restore database
+
+mongorestore ./dump
+
+https://docs.mongodb.com/manual/tutorial/backup-and-restore-tools/
+
+11, Saving large files using mongofiles
+
+Có thể thêm 1 file lớn tới db: video, sound,... với mongofiles 
+Mongo dùng GridFS specification cho việc lưu large files. GridFS phân tách large files vào các chunks và maintains tất cả metadata trong collection. 
+
+mongofiles -d book  put sample_video.mp4
+
+GridFS tạo 1 fs collection mà có 2 collection là chunks và files , có thể lấy thông tin từ MongoDB
+
+mongofiles -d book list 
+
+mongo
+use book
+db.fs.chunks.count()
+db.fs.files.count()
+db.fs.files.findOne() 
+
+12, Create documents
+
+book = {
+name: "Oliver Twist",
+author: "Charles Dickens",
+publisher: "Dover Publications",
+published_on: "December 30, 2002",
+category: ['Classics', 'Drama']
+}
+
+db.books.insert(book)
+
+shelf = {
+name : 'Fiction',
+location : { row : 10, column : 3 },
+floor : 1
+lex : { start : 'O', end : 'P' },
+}
+
+db.shelf.insert(shelf)
+
+13, Embeded Documents
+
+another = {name: "Chinese in my love", 
+  author: "Dich Van", 
+  publisher: "NXB Lao Dong", 
+  category: ["Romance", "Action"], 
+  reviews: [
+    {user: "Hai", comment: "Nice!"}, 
+    {user: "long", comment: "Not bad"}], 
+  votes: ['long', "thanh"],
+  order: {name: "toby jones", type: "lease", units: 1, cost: 40}
+}
+
+db.books.insert(another)
+
+14, Fetching embedded objects
+
+- Fetch về document đầu tiên phù hợp với condition
+
+var book = db.books.findOne({name: "Oliver Twist"})
+book.reviews.length  #=> 2
+book.votes.length    #=> 2
+book.reviews
+book.votes
+
+Chú ý: hạn chế việc dùng embebed documents vì nó sẽ làm tăng kích thước của document, và làm giảm hiệu năng của fetch,
+ví dụ nếu chỉ đơn giản chỉ cần lấy tên của book nhưng review và votes cũng sẽ được fetch
+
+15, Using MongoDB document relationships
+
+Giống như việc có embeded documents, chúng ta cũng có thể setup relationships giữa các documents
+
+db.users.insert({name: "Gautam"})
+db.users.insert({name: "Harry"})
+db.books.findOne({})
+
+db.reviews.insert({user_id: ObjectId("5a2b9f06e681499c5801f2ce"), book_id: ObjectId("5a280395aed1cea38d0bfab9"), comment: "Very interesting read"})
+
+db.reviews.insert({user_id: ObjectId("5a2b9f11e681499c5801f2cf"), "name" : "Harry", book_id: ObjectId("5a280395aed1cea38d0bfab9"), comment: "Catch me up!"})
+
+Chú ý: Nếu không bao giờ dùng nested documents để search documents thì hãy embed nó, không nên dùng relatioship
+
+Nếu dùng embed có thể search documents bởi Map/Reduce chapter 4
+
+16, So sán giữa MongoDB và SQL
+
+SELECT * FROM books                                                 db.books.find()
+SELECT * FROM books WHERE id = 3;				    db.books.find( { id : 3 } )
+SELECT * FROM books WHERE name LIKE 'Oliver%'                       db.books.find( { name : /^Oliver/ } )
+
+SELECT * FROM books WHERE name like '%Oliver%'                      db.books.find( { name : /Oliver/ } )
+
+SELECT * FROM books WHERE publisher = 'Dover Publications'          db.books.find( { publisher: "Dover Publications",
+  AND published_date = "2011-8-01"                                    published_date: ISODate("2011-8-01") } )
+
+SELECT * FROM books WHERE published_date > "2011-8-01"              db.books.find ( {published_date : { $gt :
+                                                                      ISODate("2011-8-01") } } )
+
+SELECT name FROM books ORDER BY published_date	                    db.books.find( {}, { name: 1 } ).sort( { published_
+                                                                      date : 1 } )
+
+SELECT name FROM books ORDER BY published_date DESC                 db.books.find( {}, { name: 1 } ).sort( { published_
+                                                                      date : -1 } )
+
+SELECT votes.name from books JOIN votes where                       db.books.find( { votes : {$exists : 1 } }, { votes.
+  votes.book_id = books.id                                            name : 1 } )
+
+Một số chú ý:
+- MongoDB không hỗ trợ joins. Thay thế nó fires multiple queries hoặc dùng Map/Reduce. NoSQL không thích joins
+- SQL có stored procedures. MongoDB hỗ trợ javascript functions
+- MongoDB có indexes tương tự như SQL
+- MongoDB cũng hỗ trợ Map/reduce function
+- MongoDB hỗ trợ toán tử update giống như SQL 
+- Embeded hoặc related objects thỉnh thoảng được dùng thay thế của SQL join
+- MongoDB collections giống với sql table, MongoDB documents giống với SQL rows
+
+Map/reduce: là cách distribute task processing, chúng ta map tasks tới works, và sau đó reduce results
+MongoDB hỗ trợ map method giống như ruby 
+
+17, Map/reduce
+
+map function:
+
+function() {
+  emit(this.name, {votes: this.votes});
+}
+
+edit giống như key, value được truyền vào cho reduce function
+
+reduce là consumer functions mà xử lý thông tin được emitted từ map function và emmit các kết quả được tập hợp
+với mỗi emitted data từ map function, reduce function emits kết quả. 
+
+reduce function:
+
+function reduce(key, value_array) -> value
+
+ví dụ reduce function:
+
+function test(key, values) {
+  var result = {votes: 0}
+  values.forEach(function(value) {
+    result.votes += value.votes;
+  });
+  return result;
+}
+
+test(1, [{name: "a", votes: 1}, {name: "b", votes: 2}]) #=> 3
+
+18, Rails và MongoId wrap cho MongoDB
+
+rails new sodibee –JO
+J có nghĩa là skip-prototype (và dùng jquery thay thế) -O có nghĩa là skip-activerecord nó comment dòng require "active_record/railtie" trong file application.rb
+
+gem 'mongoid', '~> 6.1.0'
+
+19, Setting Mongoid cho rails app
+
+*** Mongoid for Ruby document:  https://docs.mongodb.com/mongoid/master/tutorials/mongoid-installation/
+
+Mongoid là 1 Object Documen Mapper (ODM) tool mà map ruby object tới MongoDB documents. 
+
+rails g mongoid:config
+
+Nó sẽ tạo ra file config/mongoid.yml với một số config mặc định 
+
+development:
+  host: localhost
+  database: sodibee_development
+test:
+  host: localhost
+  database: sodibee_test
+# set these environment variables on your prod server
+production:
+  host: <%= ENV['MONGOID_HOST'] %>
+  port: <%= ENV['MONGOID_PORT'] %>
+  username: <%= ENV['MONGOID_USERNAME'] %>
+  password: <%= ENV['MONGOID_PASSWORD'] %>
+  database: <%= ENV['MONGOID_DATABASE'] %>
+  # slaves:
+  #- host: slave1.local
+  #port: 27018
+  # - host: slave2.local
+  #  port: 27019
+
+Không cần phải tạo một db rõ ràng trong mongoDB nó sẽ được tạo khi ta gọi first call tới db
+
+20, Xây dựng models trong rails
+
+Mỗi model sẽ autocreate collections trong mongoDB. 
+
+configure the orm to be Mongoid in application.rb
+
+config.generators do |g|
+  g.orm :mongoid
+end
+
+book.rb
+class Book
+  include Mongoid::Document
+
+  field :title, type: String
+  field :publisher, type: String
+  field :published_on, type: Date
+
+  field :votes, type: Array
+
+  belongs_to :author
+  has_and_belongs_to_many :categories
+
+  embeds_many :reviews
+end
+
+author.rb
+class Author
+  include Mongoid::Document
+
+  field :name, type: String
+  has_many :books
+end
+
+
+
+category.rb
+class Category
+  include Mongoid::Document
+
+  field :name, type: String
+
+  has_and_belongs_to_many :books
+end
+
+
+
+review.rb
+class Review
+  include Mongoid::Document
+
+  field :comment, type: String
+  field :username, type: String
+
+  embedded_in :book
+end
+
+
+b = Book.new(title: "Oliver Twist", publisher: "Dover Publications", published_on: Date.parse("2002-12-30"))
+Author.create(name: "Charles Dickens")
+ Category.create(name: "Drama")
+ Category.create(name: "Fiction")
+b.author = Author.where(name: "Charles Dickens").first
+b.categories << Category.first
+b.categories << Category.last
+b.save
+
+21, Tạo Embeded documents: reviews
+
+ b = Book.where(title: "Oliver Twist").first
+b.reviews.create comment: "Fast paced book!", username: "Gautam"
+b.reviews.create comment: "Excellent literure", username: "Tom"
+b.reviews 
+
+mongo$ db.books.findOne()
+
+Bây giờ khi fetch book thì mongo cũng đồng thời fetch các reviews
+
+22, Single table inherit (STI)
+
+class Order
+  include Mongoid::Document
+
+  field :created_at, type: DateTime
+  field :type, type: String
+
+  belongs_to :book
+
+  embeds_one :lease
+  embeds_one :purchase
+  
+end
+
+class Lease
+  include Mongoid::Document
+
+  field :from, type: Datetime
+  field :till, type: Datetime
+
+  embedded_in :order
+end
+
+class Purchase
+  include Mongoid::Document
+
+  field :quantity, type: Integer
+  field :price, type: Float
+
+  embedded_in :order
+end
+
+23, Array type and map/reduce function
+
+https://docs.mongodb.com/mongoid/master/tutorials/mongoid-queries/#map-reduce
+
+b = Book.where(name: "Great Expectations").first
+b.votes = []
+b.votes << {username: "Gautam", rating: 9}
+b.votes << {username: "Tom", rating: 3}
+b.save
+
+c = Book.where(title: /cities/).first
+
+map = %q{function() {
+  this.votes.forEach(function(x) {
+    emit(x.username, {rating: x.rating});
+  });
+  }
+}
+
+reduce = %q{function(key, values) {
+  var result = {rating: 0};
+  values.forEach(function(value) {
+    result.rating += value.rating;
+  });
+  return result;
+  }
+}
+
+rs = Book.all.map_reduce(map, reduce).out(inline: 1)
+
+rs.to_a #=>
+
+[{"_id"=>"Dick", "value"=>{"rating"=>12.0}}, {"_id"=>"Gautam", "value"=>{"rating"=>21.0}}, {"_id"=>"Tom", "value"=>{"rating"=>3.0}}, {"_id"=>"hoang", "value"=>{"rating"=>14.0}}, {"_id"=>"jeny", "value"=>{"rating"=>7.0}}, {"_id"=>"tim", "value"=>{"rating"=>8.0}}]
+
+out options:
+inline: 1: Don’t store the output in a collection.
+replace: "name": Store in a collection with the provided name, and overwrite any documents that exist in it.
+merge: "name": Store in a collection with the provided name, and merge the results with the existing documents.
+reduce: "name": Store in a collection with the provided name, and reduce all existing results in that collection.
+
+Chú ý: Nên dùng map/reduce chỉ khi phải xử lý data và trả về kết quả. Cho hầu hết các trường hợp sẽ dùng query và 
+có được kết quả 
+
+
+
+24, Or query 
+irb> Book.any_of({:reviews.exists => true}, {:votes.exists => true})
+
+mongo> db.books.find({"$or":[{reviews:{"$exists" : true}}, {votes :
+{"$exists": true}}]})

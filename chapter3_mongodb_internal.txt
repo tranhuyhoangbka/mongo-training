@@ -1,0 +1,60 @@
+1, Understanding Binary JSON
+
+The following is a sample of a JSON object we have seen before:
+{
+"_id" : ObjectId("4e86e45efed0eb0be0000010"),
+"author_id" : ObjectId("4e86e4b6fed0eb0be0000011"),
+"category_ids" : [
+ObjectId("4e86e4cbfed0eb0be0000012"),
+ObjectId("4e86e4d9fed0eb0be0000013")
+],
+"name" : "Oliver Twist",
+"published_on" : ISODate("2002-12-30T00:00:00Z"),
+"publisher" : "Dover Publications"
+}
+
+2, Các collections có thể được scope hoặc namespace. Ví dụ, một collection rack có shelves và panels trong nó.
+Các collections đó cũng có các collection bên trong nó
+db.rack
+db.rack.shelves
+db.rack.shelves.sections
+
+db.rack.panels
+db.rack.panels.components 
+
+3, Capped collections
+capped collections có một số lượng cố định documents trong nó. Chúng có thể được xem xét như queue mà xóa các phần tử cũ
+khi queue đạt số lượng tối đa elemens. Ví dụ điển hình là log entries. Cách tạo capped colleciton như sau:
+
+    Db.createCollection("myqueue", {capped: true, size: 10000})
+
+4, Date trong MongoDb
+
+được lưu dạng time in seconds từ 1/1/1970
+
+> new ISODate("2011-12-31T12:01:02+04:30")
+ISODate("2011-12-31T07:31:02Z")
+
+> new ISODate("sdf")
+Tue Nov 8 08:14:49 uncaught exception: invalid ISO date
+
+> new ISODate("garbage 2011-12-31T12:01:02+05:30 more garbage")
+ISODate("2011-12-31T06:31:02Z")
+
+5, Javascript và MongoDB 
+Mongodb dùng db.eval function để evalutate custom javascript function
+
+Ví dụ: Muốn xóa tất cả các authors mà không có book nào cả
+
+function rid_fakes() {
+  var ids = [];
+  db.authors.find().forEach( function(obj) {
+    if (db.books.find({author_id: obj._id }).length() == 0 ) {
+      ids.push(obj._id);
+    }
+  });
+  db.authors.remove({_id : { $in : ids }});
+}
+
+db.eval(rid_fakes);
+

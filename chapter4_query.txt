@@ -1,0 +1,135 @@
+1,  Tìm kiếm các books được publish bởi Dover Publications
+
+mongo
+use sodibee_development
+db.books.find({publisher: "Dover Publications"})
+
+2, để thấy các params cho find dùng command
+db.books.find 
+
+query: điều kiện
+fields: các fields trong document sẽ được return 
+limit: giống limit bên sql
+skip: giống offset trong sql
+
+3, Tìm các books mà có author là Charles Dickens, publisher là : Dover Publications
+dùng 2 query
+
+a = db.authors.findOne({name: "Charles Dickens"})
+db.books.find({publisher: "Dover Publications", author_id: a._id})
+
+4, Chỉ select những fields xác định:
+db.books.find({publisher: "Dover Publication"}, {title: 1, published_on: 1, publisher: 1}); # (chỉ trả về các column xác định này)
+
+db.books.find({publisher: "Dover Publication"}, {title: 0, published_on: 0, publisher: 0});
+
+có thể thay 1 là true, 0 là false
+
+Chú ý đã set true thì phải true cả , false thì false cả không thể trộn lẫn true, với false sẽ báo lỗi
+ví dụ: b.books.find({publisher: "Dover Publication"}, {title: 1, published_on: 0, publisher: 0}); (field)
+
+5, Skip và limit (giống offset và limit trong sql)
+
+Ví dụ: get second book, hoặc third book
+
+db.books.find({}, {}, 1, 1) second book
+db.books.find({}, {}, 1, 2) third book 
+
+limit trước, offset sau
+
+
+6, Condition queries and và or
+
+mặc định khi có nhiều condition thì and được dùng 
+
+   db.books.find({publisher: "Dover Publications", name: "Oliver Twist"})
+trong trường hợp này and được dùng
+
+- Dùng $or 
+
+Tìm các books bởi name hoặc publisher
+
+   db.books.find({$or: [{name: "Oliver Twist"}, {publisher: "Dover Publications"}]})
+
+Có thể dùng $or kết hợp với các parameters khác
+
+  db.books.find({published_on: ISODate('2002-12-30'), $or: [{name: "Oliver Twist"}, {publisher: "Dover   Publications"}]})
+
+7, Viết các queries dùng $gt, $lt, $ne, $lte, $gte
+
+- Tìm các document có rank <= 10
+
+  db.books.find({rank: {$lte: 10}})
+
+- Tìm các document có rank <= 10 nhưng ko = 1
+
+  db.books.find({rank: {$lte: 10, $ne: 1}})
+
+  db.books.find({published_on: {$lte: ISODate('2015-12-30')}})
+
+8, $exists tìm các document mà tồn tại 1 field xác định
+
+   db.books.find({rank: {$exists: 1}})
+
+9, Search in Array
+
+  db.books.insert({categories: ["Drama", "Action"]})
+
+  db.books.find({categories: "Drama"})
+  db.books.find({categories: {$ne: "Romance"}})
+
+  Với reviews là embeded documents
+
+  db.books.find({"reviews.username": "Gautam"})
+
+10, Search in Array, dùng $in, $nin
+
+Tương tự với In trong mysql 
+
+   db.books.find({category_ids: {$in: [ObjectId("5a2bbd6e5d72263aeedf35ec"), ObjectId("5a2bbd7b5d72263aeedf35ed")]}}
+
+   db.books.find({category_ids: {$nin: [ObjectId("555555555555555555555555"), ObjectId("666666666666666666666666")]}})
+
+11, Search in Array, dungf $all
+
+Tìm các document mà có 1 array nào đó có giá trị match với tất cả các giá trị trong condition array 
+
+  db.books.find({category_ids: {$all: [ObjectId("5a2bbd6e5d72263aeedf35ec"), ObjectId("5a2bbd7b5d72263aeedf35ed")]}})
+
+12, Search in Hashes
+
+  db.books.insert({categories: {drama: 1, thriller: 2}})
+
+  db.books.find({"categories.drama": 1})
+
+13, Search in embebed documents
+
+  Giống hệt như search trong hashes
+
+  db.books.find({"reviews.username": "Tom"})
+
+14, Search dùng Regular Expression
+
+  db.names.insert({name: "Joe"})
+  db.names.insert({name: "Joey"})
+  db.names.insert({name: "Jonas South"})
+  db.names.insert({name: "Aron Bjoe"})
+
+  db.names.find({name: /Joe/})
+  db.names.find({ name : /joe/i} )
+  db.names.find({name: /^Jo/})
+  db.books.find( { title: { $neq : /the|a/i } } )
+
+
+  Regex:   /<some regex>/<flags>/
+
+  i : Case insensitive.
+  m : Multiline.
+  x : Extended—ignore all whitespaces in the regex .
+  a : Dot all. Allow dot to match all characters, including new line characters!
+
+
+
+  
+
+
