@@ -1,0 +1,453 @@
+1, Mongo-ruby-driver
+gem install mongo
+
+
+require 'mongo'
+client = Mongo::Client.new(['127.0.0.1:27017'], database: 'sodibee_development')
+# client = Mongo::Client.new('mongodb://127.0.0.1:27017/sodibee_development')
+# client = Mongo::Client.new('mongodb://127.0.0.1:27017/sodibee_development', strict: true)
+# strict option ensure collection exists before accsessing it otherwise it throw an error
+db = client.database
+# puts db.collections
+puts db.collection_names
+
+collection = client[:books]
+puts collection.count
+
+# find
+collection.find.each do |document|
+  puts document
+end
+
+puts collection.find({title: /Procrastinate/}).first
+
+# insert
+new_book = {title: 'open heart', rank: 5, votes: [{username: "Stev", rating: 8}, {username: "Jonh han", rating: 9}]}
+result = collection.insert_one(new_book)
+puts result.n   # count inserted documents
+
+books = [{title: 'the leaf', rank: 10}, {title: 'three countries', rank: 8}]
+result = collection.insert_many(books)
+puts result.inserted_count
+
+# update
+result = collection.update_one({title: 'open heart'}, {'$set' => {'publisher' => 'catharia'}})
+puts collection.find({name: 'open heart'}).first
+
+result = collection.update_many({}, {'$set' => {publisher: 'John vu'}})
+puts result.modified_count
+
+# delete
+result = collection.delete_one({title: 'open heart'})
+puts result.deleted_count
+
+result = collection.delete_many({title: /the/})
+puts result.deleted_count
+
+2, có 2 loại gem để mapping tới mongo db là: MongoMapper và MongoId
+
+2.1. MongoMapper
+
+Chú ý: Mongo Mapper không dùng mongo ruby driver để connect tới mongo db 
+
+gem 'mongo_mapper'
+
+rails g mongo_mapper:config
+
+rails g mongo_mapper:model Customer 
+
+2.2. Mongoid
+
+- Dùng mongo ruby driver để connect tới mongo db
+
+gem 'mongoid'
+
+rails g mongoid:config
+# => create config/mongoid.yml file
+
+- Thêm config tới application.rb để rails không load ActiveRecord 
+
+xóa file config/database.yml
+xóa dòng require 'rails/all'
+
+require các thư viện sau vào application.rb
+
+require_relative 'boot'
+
+require "rails"
+# Pick the frameworks you want:
+require "active_model/railtie"
+require "active_job/railtie"
+# require "active_record/railtie"
+require "action_controller/railtie"
+require "action_mailer/railtie"
+require "action_view/railtie"
+require "action_cable/engine"
+require "sprockets/railtie"
+require "rails/test_unit/railtie"
+
+2.2.1, các kiểu dữ liệu
+
+class Person
+  include MongoId::Document
+
+  field :name, type: String
+  field :age, type: Integer
+  field :height, type: Float
+  field :born_on, type: Date
+  field :born_at, type: Time
+  field :interests, type: Array
+  field :is_alive, type: Boolean
+end
+
+2.2.2. Thêm sửa xóa dữ liệu
+person = Person.new(name: 'Tom Sawyer', age: 33, height: 5.10, born_on: Date.parse('1972-12-23'), born_at: Time.now, is_alive: true, interests: ['Soccer', 'Movies'])
+
+person.name = 'Huckleberry Finn'
+
+person.save
+
+person.destroy
+
+2.2.3: query
+
+- find
+
+person = Person.find('4ef4ab59fed0eb8962000002')
+Person.first
+Person.last
+
+Person.all
+Person.all(age: 33)
+
+Điều gì xảy ra nếu ta có 1 triệu person và dùng .all method. liệu 1 triệu object sẽ được fetch. MongoDb dùng cursor để fetch object in batches, mặc định thì 1000 objects được fetch 
+
+- Mongo criteria
+
+các query sẽ không fired vào database ngay lập tức mà đại diện là các criteria, chúng các thể được
+chain với nhau và khi thực sự cần data query sẽ fire vào db và trả về các documents
+Nó có thể gọi là các named scopes 
+
+- condition query dùng where
+
+Person.where(age: 33)
+
+people = Person.where(:age.gt => 15) # Person.where(age: {'$gt' => 15})
+people = people.where(:name => /saw/i)
+
+- limit, skip, offset
+
+Person.where(:age.gt => 15).limit 5
+Person.all.skip(5).limit(5) # page 2 with 5 elements
+Person.all.skip(10).limit(5) # page 3 with 5 elements
+
+
+- Model relationships
+
+One to many
+Many to many
+One to One
+Polymorphic
+
+- One to many relationship
+
+class Author
+  include Mongoid::Document
+
+  field :name, type: String
+  has_many :books
+end
+
+
+class Book
+  include Mongoid::Document
+
+  field :title, type: String
+  field :publisher, type: String
+  field :published_on, type: Date
+
+  belongs_to :author
+
+end
+
+
+a = Author.create(name: 'Martin Jacken')
+ b = Book.create title: 'Olderest sister', published_on: Date.parse('1983-12-23'), publisher: 'Dover Publications', author: a
+
+- many to many relationship
+
+class Category
+  include Mongoid::Document
+
+  field :name, type: String
+
+  has_and_belongs_to_many :books
+end
+
+
+class Book
+  include Mongoid::Document
+
+  field :title, type: String
+  field :publisher, type: String
+  field :published_on, type: Date
+
+  field :votes, type: Array
+
+  field :rank, type: Integer
+
+  belongs_to :author
+  has_and_belongs_to_many :categories
+
+  embeds_many :reviews
+end
+
+Category.all.pluck :name
+
+drama = Category.create(name: "Drama")
+
+f = Category.first
+f.books << Book.last
+f.books
+Book.last.categories
+f.save
+
+- One to one relation
+
+class BookDetail
+  include Mongoid::Document
+
+  field :page_count, type: Integer
+  field :price, type: String
+  field :binding, type: String
+  field :isbn, type: String
+
+  belongs_to :book
+end
+
+
+class Book
+  include Mongoid::Document
+
+  field :title, type: String
+  field :publisher, type: String
+  field :published_on, type: Date
+
+  field :votes, type: Array
+
+  field :rank, type: Integer
+
+  belongs_to :author
+  has_and_belongs_to_many :categories
+  has_one :book_detail
+
+  embeds_many :reviews
+end
+
+
+oliver = Book.first
+oliver.create_book_detail(page_count: 250, price: 10, binding: 'standard', isbn: '"124sdf23sd")')
+
+Book.first.book_detail
+BookDetail.first
+
+- Polymorphic relations
+
+có 2 loại polymorphic relations
+
++ Single Collection Inheritance (SCI)
++ Basic polymorphic relations
+
+- Single collection inheritance
+
+class Driver
+  include Mongoid::Document
+
+  field :name, type: String
+  field :age, type: Integer
+  field :address, type: String
+  field :weight, type: Float
+  
+end
+
+class Terrestrial < Driver
+  field :license, type: Boolean
+end
+
+class Marine < Driver
+  field :can_swim, type: Boolean
+end
+
+class AeroSpace < Driver
+  field :gforce, type: Float
+end
+
+
+# app/models/pilot.rb
+class Pilot < AeroSpace
+end
+# app/models/astronaut.rb
+class Astronaut < AeroSpace
+end
+# app/models/ship_driver.rb
+class ShipDriver < Marine
+end
+# app/models/submarine_driver.rb
+class SubmarineDriver < Marine
+end
+# app/models/car_driver.rb
+class CarDriver < Terrestrial
+end
+# app/models/bike_driver.rb
+class BikeDriver < Terrestrial
+end
+
+Pilot.create(name: "Gautam")
+CarDriver.create name: "Car Gautam"
+
+ShipDriver.create(name: "Ship Gautam")
+Marine.count
+Marine.first
+Terrestrial.count
+Terrestrial.first
+Driver.count
+
+- Basic polymorphic relations
+
+Chọn SCI hay basic polymorphic: nếu muốn tất cả nằm ở 1 collection thì dùng sci 
+ngược lại thì dùng basic polymorphic
+
+Nếu object có nhiêu properties hoặc dữ liệu thì dùng basic polymorphic (polymorphic là data centric)
+Nếu object có các properties tương tự nhưng khác nhau về hành vi (function centric) thì dùng SCI
+
+class Vehicle
+  include Mongoid::Document
+
+  belongs_to :resource, polymorphic: true
+
+  field :terrain, type: String
+  field :cost, type: Float
+  field :weight, type: Float
+  field :max_speed, type: Float
+end
+
+class Ship
+  include Mongoid::Document
+
+  has_one :vehicle, as: :resource
+
+  field :is_military, type: Boolean
+  field :is_cruise, type: Boolean
+  field :missile_capable, type: Boolean
+  field :anti_aircraft, type: Boolean
+  field :number_engines, type: Integer
+end
+
+ship = Ship.new is_military: true
+vehicle = Vehicle.create resource: ship
+
+- Dùng embeded objects
+
+class Driver
+  include Mongoid::Document
+
+  field :name, type: String
+  field :age, type: Integer
+  field :address, type: String
+  field :weight, type: Float
+  embeds_one :address
+  embeds_many :bank_accounts
+end
+
+
+class Address
+  include Mongoid::Document
+
+  field :street, type: String
+  field :city, type: String
+
+  embedded_in :driver
+end
+
+
+class BankAccount
+  include Mongoid::Document
+
+  field :account_number, type: String
+  field :balance, type: Float
+
+  embedded_in :driver
+end
+
+
+ d = Driver.first
+d.address = Address.new(street: "SB Road", city: 'Pune')
+d.bank_accounts << BankAccount.new(account_number: '1230001231225', balance: 1231.23)
+d.save
+d = Driver.first
+ d.bank_accounts
+
+Chú ý: Không thể tạo hoặc access tới embedded objects mà không qua 1 parent object
+
+- Dùng polymorphic cho embebed documents
+
+  + Single Collection Inheritance
+
+class Driver
+  include Mongoid::Document
+
+  field :name, type: String
+  field :age, type: Integer
+  field :address, type: String
+  field :weight, type: Float
+  embeds_one :address
+  embeds_many :bank_accounts
+  embeds_many :licenses
+end
+
+class License
+  include Mongoid::Document
+  embedded_in :driver
+end
+
+class CarLicense < License
+end
+
+
+d = Driver.first
+d.licenses << CarLicense.new
+d.save
+Driver.first.licenses
+
+  + dùng Basic embedded polymorphism
+
+class CarDriver < Terrestrial
+  embebs_many :insurance, as: :insurable
+end
+
+class Pilot < AeroSpace
+  embeds_many :insurances, as: :insurable
+end
+
+class Insurance
+  include Mongoid::Document
+
+  embedded_in :insurable, polymorphic: true
+end
+
+class TravelInsurance < Insurance
+end
+
+class TheftInsurance < Insurance
+end
+
+
+
+
+- Lựa chọn giữa embed và associate documents
+
+Khi modeling data, nếu bạn thấy rằng child documents không thể tồn tại mà không có parent object
+và thấy rằng không cần search các child objects một cách trực tiếp thì bạn có thể embed chúng 
+
+
+

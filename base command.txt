@@ -1,3 +1,6 @@
+https://docs.mongodb.com/mongoid/master/#ruby-mongoid-tutorial
+https://gist.github.com/jhjguxin/5779890
+
 1, connect to mongodb
 $ mongo
 $ use book

@@ -1,0 +1,268 @@
+1, init project
+
+rails new sodibee –OT
+
+Now, verify that the config/application.rb has the following code in it. Notice that the
+ActiveRecord railtie is commented out:
+require File.expand_path('../boot', __FILE__)
+# Pick the frameworks you want:
+# require "active_record/railtie"
+
+-O : Using this option, the Rails project skips Active Record files
+-T : Using this option, the Rails project skips Test::Unit files.
+
+gem 'mongoid'
+
+rails generate mongoid:config
+
+2, field method
+
+:type : It is the data type which should either be a String, Data, Integer, Float,
+Bignum, Boolean, or something similar
+:as : This is required when specifying a polymorphic relation
+:default : This sets the default value to the field
+:localize : It tells Mongoid that this is i18n compliant
+:identity : This is for specifying the information for the identity map
+
+Nếu ko có option type thì mặc định là String
+
+default có thể nhận 1 biểu thức
+
+field :published_on, default: Time.now
+field :published_on, default: { Time.now – 2.years }
+
+3, read, write attributes
+
+book = Book.first
+book.name # => "Oliver Twist"
+book[:name] # => "Oliver Twist"
+book.read_attribute(:name)
+
+book.name = "Something Else"
+book[:name] = "Something Else"
+book.write_attribute(:name, "Something Else")
+
+book.write_attributes(name: "Something Else", publisher: "Dover")
+
+4, Indexing attributes để tăng hiệu năng tìm kiếm
+
+class Book
+  include Mongoid::Document
+
+  field :title, type: String
+  field :publisher, type: String
+  ...
+  index :publisher
+end
+
+* unique index
+
+index :publisher, unique: true
+
+* Đánh index in background
+việc đánh index realtime chó thể expensive khi nó chặn các database operations khác trong khi indexing. Việc
+thêm background option thực hiện đánh index in background
+
+class Book
+  index :publisher, unique: true, background: true
+end
+
+5, Geospatial indexing
+
+class Location
+  include Mongoid::Document
+  field :coordinates, type: Array
+  index [ [:coordinates, Mongo::GEO2D] ]
+end
+
+6, Sparse indexing
+khi chúng ta không muốn index mọi document mà chỉ các document có các fields được index, chúng ta
+set nó như sparse index
+
+class Book
+  include Mongoid::Document
+  field :publisher, type: String
+  ...
+  index :publisher, sparse: true
+end
+
+Khi đó kết quả trả về từ query có thể chỉ từ indexed document không phải tất cả document trong collection
+
+Hiện tại, document chỉ có thể có 1 field được đánh index như sparse
+
+Invalid index specification on Book: publisher, {}
+summary:
+  Indexes in Mongoid are defined as a hash of field name and direction/2d pairs, with a hash for any additional options.
+resolution:
+  Ensure that the index conforms to the correct syntax and has the correct options.
+
+ Valid options are:
+   background: true|false
+   database: 'database_name'
+   drop_dups: true|false
+   name: 'index_name'
+   sparse: true|false
+   unique: true|false
+   min: 1
+   max: 1
+   bits: 26
+   key: 26
+   bucket_size : 1
+   sphere_version : 1
+   text_version : 1
+   version : 1
+   weights: { content: 1, title: 2 }
+   expire_after_seconds: number_of_seconds
+   partial_filter_expression
+   storage_engine
+   language_override
+   default_language
+   collation
+ Valid types are: 1, -1, '2d', '2dsphere', 'geoHaystack', 'text', 'hashed'
+
+ Example:
+   class Band
+     include Mongoid::Document
+     index({ name: 1, label: -1 }, { sparse: true })
+     index({ location: '2d' }, { background: true })
+   end
+
+7, Dynamic fields
+
+Mặc định thì mongo bật chế độ Dynamic field
+
+Nghĩa là nếu 1 field ko được định nghĩa trong file model thì nó sẽ tự động đucợ thêm
+
+b = Book.first
+=> #<Book _id: 4e86e45efed0eb0be0000010, _type: nil, publisher: "Dover
+Publications", name: "Oliver Twist">
+b[:dedication] = "The kids"
+b.save
+b
+<Book _id: 4e86e45efed0eb0be0000010, _type: nil, publisher: "Dover
+Publications", name: "Oliver Twist", dedication: "The kids">
+
+Nhưng khi field không được đinh nghĩa thì nó sẽ ko có các methods set, get 
+b.dedication
+b.dedication = "Not for the kids"
+
+gây ra lỗi 
+
+* Dynamic field chỉ access được thông qua [] method
+b[:dedication]
+
+8, Localization I18n
+
+https://gist.github.com/jhjguxin/5779890
+
+
+field :price, type: String, localize: true
+
+ta sẽ không set type cho field này mà dùng localize option. Nó nói với Mongoid là lưu data này như 1 hash
+phụ thuộc các locales khác nhau được supported, different currency được set.
+
+ b.price   = "40$"
+I18n.locale = :vi
+b.price = "800 nghin dong"
+b.save
+b
+b.price_translations
+=> {"en"=>"40$", "vi"=>"800 nghin dong"}
+
+I18n.locale #=> :en
+b.price #=> 40$
+I18n.locale = :vi
+b.price #=>800 nghin dong
+
+9, Using arrays and hashes in models
+
+class Book
+  include Mongoid::Document
+  field :votes, type: Array
+  field :reviews, type: Hash
+end
+
+b = Book.first
+b.votes << [ {"username"=>"Gautam", "rating"=>3} ]
+vote = b.votes[0]
+vote['username']
+
+b.reviews["Gautam"] = "Very entertaining book"
+b
+<Book _id: 4e86e45efed0eb0be0000010, _type: nil, title: nil,
+publisher: "Dover Publications", vote: [{"username"=>"Gautam",
+"rating"=>3} ], reviews: { "Gautam" => "Very entertaining book" }>
+
+10, embedded objects
+
+Giống như mảng các hash ngoại trừ các hash này có thêm _id
+
+Khi nào dùng hash, khi nào dùng embedded objects
+
+Dùng embedded object khi cần dùng active model callbacks như before_save, after_save trong các embedded objects
+
+
+11, Defining relations in models
+
+Many-to-one relations
+  One-to-one relations
+  Many-to-many relations
+  Polymorphic relations
+
+Common options:
+
+ :class_name : The class name if it's not determined from the name.
+ :extend : This is the module which will be extended.
+ :inverse_class_name : This is used to determine the foreign key.
+
+
+:inverse_of : This is the reverse relation, it is very important for creating or
+embedding relations.
+:name : The name of the relation.
+:relation : The type of the relation. ( Referenced::One , Embedded::In ,
+among others).
+:validate : True or false. This is true by default as we validate the relation.
+
+class Foo
+  include Mongoid::Document
+  has_many :bar_alias, class_name: "Bar"
+end
+
+
+  :as : This option is required when defining polymorphic relations
+  :autosave : This option saves the related child automatically when the
+parent is saved
+  : dependent : We use this option to destroy all child objects just like a
+cascaded delete
+  :foreign_key : This option indicates an explicitly defined foreign key
+  :order : Set the default order for the relation
+  :index : This option indicates the indexed relation field
+  :polymorphic : This option specifies if the relation is a polymorphic relation
+  :cyclic : This option specifies if a relation is a cyclic embedded relation.
+  :cascaded_callbacks : This option invokes cascaded callbacks on
+embedded objects
+:versioned : This option helps manage versions of embedded documents
+
+12, Options cho has_one
+
+class Book
+  include Mongoid::Document
+  has_one :book_detail
+end
+
+* :as options
+
+khi relation là 1 polymorphic relation
+
+class Ship
+  include Mongoid::Document
+  has_one :vehicle, as: resource
+end
+
+Nó nói rằng vehicle là 1 polymorphic relation có thể access qua resource_type và resource_id fields trong
+vehicles collections
+
+*** autosave option
+true bởi mặc định, khi object được create thì child objects cũng được create, nhưng khi update chỉ có
+parent object mới được update
+
