@@ -266,3 +266,238 @@ vehicles collections
 true bởi mặc định, khi object được create thì child objects cũng được create, nhưng khi update chỉ có
 parent object mới được update
 
+*** dependent option
+được dùng trong cascaded delete:
+
+:delete, :delete_all: xóa relation nhưng ko gọi active model: before_delete, after_delete callback
+:destroy, :destroy_all: xóa relation và gọi các callbacks
+:nullify, :nullify_all: chỉ được dùng cho các embedded documents. khi được xác định, các embedded document sẽ được reference tới nil
+
+*** foreign_key 
+
+class Book
+  include Mongoid::Document
+  has_one :book_detail, foreign_key: :book_detail_info
+end
+
+
+13, has_many
+
+các options: :as, :autosave, :dependent, :foreign_key
+
+*** order option
+
+class Author
+  include Mongoid::Document
+
+  has_many :books, order: {title: 1}
+end
+điều này sẽ get books của 1 author được sắp xếp theo title 
+
+14, options cho belongs_to
+
+nó phải presence để hoàn thiện has_one, has_many relation
+
+nó còn có các option bổ sung là autosave và foreign_key
+
+15, index option
+
+option này xác định liệu foreign_key được index hay không. 
+Nói chung là foreign_key thì nên được đánh index. Giá trị được set tới true hoặc false
+
+class Book
+  include Monogoid::Document
+
+  has_one :review, index: true
+end
+
+16, polymorphic option
+
+class Vehicle
+  include Mongoid::Document
+
+  belongs_to :resource, polymorphic: true
+end
+
+17, options cho has_and_belongs_to_many
+
+class Book
+  include Mongoid::Document
+  has_and_belongs_to_many :categories
+end
+
+class Category
+  include Mongoid::Document
+  has_and_belongs_to_many :books
+end
+
+nó dùng các options chuẩn như: autosave, dependent, foreign_key, index, order
+
+18, inverse_of option
+
+default được set tới true trong many_to_many . Nếu muốn one-sided references được lưu, set nó tới false
+nếu ko muốn category_ids trong Book object thì:
+
+class Category
+  include Mongoid::Document
+  has_and_belongs_to_many :books, inverse_of: nil
+end
+
+irb> b = Book.new
+=> #<Book _id: 4ef5ab79fed0eb89bf000002, _type: nil, title: nil,
+publisher: "Dover Publications", category_ids = [], category_name:
+"Oliver Twist">
+irb> c = Category.last
+=> #<Category _id: 4ef5b48efed0eb8d17000001, _type: nil, name:
+"Drama", book_ids: []>
+irb> c.books << b
+=> [BSON::ObjectId('4ef5ab79fed0eb89bf000002')]
+irb> c
+=> #<Category _id: 4ef5b48efed0eb8d17000001, _type: nil, name:
+"Drama", book_ids: [BSON::ObjectId('4ef5ab79fed0eb89bf000002')]>
+irb> b
+=> #<Book _id: 4ef5ab79fed0eb89bf000002, _type: nil, title: nil,
+publisher: "Dover Publications", category_ids = [], category_name:
+"Oliver Twist">
+
+
+19, setting up the following and followers relationship
+
+class Author
+  include Mongoid::Document
+
+  field :name, type: String
+  has_many :books
+
+  has_and_belongs_to_many :followers, class_name: "Author", inverse_of: :following
+  has_and_belongs_to_many :following, class_name: "Author", inverse_of: :followers
+end
+
+irb> > a = Author.first
+=> #<Author _id: 4e86e4b6fed0eb0be0000011, _type: nil, name: "Charles
+Dickens", follower_ids: [], following_ids: []>
+irb> > b = Author.last
+=> #<Author _id: 4ef5ab6ffed0eb89bf000001, _type: nil, name: "Mark
+Twain", follower_ids: [], following_ids: []>
+irb> a.following << b
+=> [BSON::ObjectId('4ef5ab6ffed0eb89bf000001')]
+irb> a
+=> #<Author _id: 4e86e4b6fed0eb0be0000011, _type: nil, name: "Charles
+Dickens", follower_ids: [], following_ids: [BSON::ObjectId('4ef5ab6ffe
+d0eb89bf000001')]>
+irb> b
+=> #<Author _id: 4ef5ab6ffed0eb89bf000001, _type: nil, name: "Mark
+Twain", follower_ids: [BSON::ObjectId('4e86e4b6fed0eb0be0000011')],
+following_ids: []>
+irb> a.following
+=> [#<Author _id: 4ef5ab6ffed0eb89bf000001, _type: nil, name: "Mark
+Twain", follower_ids: [BSON::ObjectId('4e86e4b6fed0eb0be0000011')],
+following_ids: []>]
+irb> b.followers
+=> [#<Author _id: 4e86e4b6fed0eb0be0000011, _type: nil, name:
+"Charles Dickens", follower_ids: [], following_ids: [BSON::ObjectId('4
+ef5ab6ffed0eb89bf000001')]>]
+
+20, options cho embeds_one
+
+set up parent embed 1 single child. Nó có :as option cho polymorphic, ngoài ra còn có các options 
+bổ sung:
+
+*** cascade_callbacks 
+các embedded documents là 1 bộ phận của parent, their không được gọi khi parrent được save.
+Chúng ta cần xác định rõ ràng option này nếu muốn embed child document chạy các callback
+
+class Book
+  include Mongoid::Document
+  embeds_one :book_info, cascade_callbacks: true
+end
+
+
+*** cyclic
+class Author
+  include Mongoid::Document
+
+  field :name, type: String
+  has_many :books
+
+  embeds_many :child_authors, class_name: 'Author', cyclic: true
+  embedded_in :parent_author, class_name: 'Author', cyclic: true
+end
+
+a = Author.first
+a.child_authors << Author.last
+a.child_authors
+a.child_authors.first.parent_author
+
+Chú ý: nó tương tự với việc set recursively_embeds_many trong model Author
+
+21, Options cho embeds_many
+
+các options bổ sung: :as, :cascade_callbacks, :cyclic, :order
+
+22, Options cho embedded_in
+
+method này nói cho ta biết object mà document được embed. Nó rất quan trọng cho việc setting embed relation
+
+Nếu ko có embedded_in docment sẽ không được embeded
+
+23, :name option
+
+Nếu ta muốn save relation 2 lần trong same parent class, ví dụ Vehicle model, chúng ta muốn source và
+destination fields mà chúng đều là Location:
+
+class Vehicle
+  include Mongoid::Document
+  embeds_one :source, class_name: "Location"
+  embeds_one :destination, class_name: "Location"
+end
+
+class Location
+  include Mongoid::Document
+  embedded_in :vehicle, name: :source
+  embedded_in :vehicle, name: :destination
+end
+
+24, Đưa vào model các module 
+
+Ta sẽ nhìn 1 ít module được tạo để dùng cùng với mongoid
+có rất nhiều gem availabel
+
+*** Paranoia module
+dùng cho soft delete. Các document ko thực sự được xóa, mà là được đánh dấu như được xóa bằng cách
+thêm field deleted_at 
+
+gem 'mongoid_paranoia'
+
+class IAmParanoid
+  include Mongoid::Document
+  include Mongoid::Paranoia
+end
+
+ a = IAmParanoid.create
+b = IAmParanoid.create
+
+IAmParanoid.count
+a.remove
+IAmParanoid.count
+a = IAmParanoid.deleted.first
+a.restore
+IAmParanoid.count
+
+Xóa vĩnh viễn document
+delete!, destroy!
+
+
+
+*** Versioning
+
+gem 'mongoid-versioning', github: 'simi/mongoid-versioning'
+
+class Deltassss
+  include Mongoid::Document
+  include Mongoid::Versioning
+
+  max_versions 5
+
+  field :name, type: String
+end
