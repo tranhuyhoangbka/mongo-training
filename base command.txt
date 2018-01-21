@@ -177,6 +177,10 @@ Một số chú ý:
 Map/reduce: là cách distribute task processing, chúng ta map tasks tới works, và sau đó reduce results
 MongoDB hỗ trợ map method giống như ruby 
 
+17, index field
+
+db.authors.ensureIndex({name: 1})
+
 17, Map/reduce
 
 map function:

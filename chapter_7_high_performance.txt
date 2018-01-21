@@ -1,0 +1,215 @@
+1, bật chế độ profiling cho mongodb
+
+sudo mongod run --config /etc/mongodb.conf --rest -vvvv --profile=1
+
+hoặc
+
+mongo> db.setProfilingLevel(1)
+
+#=> { "was" : 0, "slowms" : 100, "ok" : 1 }
+set ngưỡng slow là 100ms
+
+khi chúng ta bật profiling, thông tin được log vào trong db.system.profile
+
+Tư tưởng có thể dùng cho mysql
+
+mongo> db.system.profile.find()
+{ "ts" : ISODate("2012-06-08T07:26:43.186Z"),
+"op" : "query", "ns" : "sodibee_development.authors",
+"query" : { "name" : /in/ }, "nscanned" : 609, "nreturned" : 101,
+"responseLength" : 6613, "millis" : 10, "client" : "127.0.0.1", "user"
+: "" }
+
+ op là operation và ns là collection
+
+1.1, nscanned xác định số lượng objects mà được scan để fetch kết quả. nreturned xác định số lượng objects
+trong kết quả
+Nếu thấy nscanned > nreturned nó có nghĩa rằng có nhiều object không cần thiết được scan. Để giải quyết
+vấn đề này, thêm 1 index trên các fields đã dùng trong điều kiện search
+
+1.2, responseLength (reslen) là số lượng bytes trong kết quả, millis là số miliseconds mà mongo cần để
+xử lý query này
+
+nếu thấy reslen quá lớn (mấy trăm kilobytes) nó là 1 tác nhân ảnh hưởng ltoiws performance. Dùng
+field selector trong find method để lấy chỉ các field cần thiết
+
+1.3, với các collections và được fetched thường xuyên, thực hiện index các fields mà sẽ được query và dùng
+explain để check liệu query có fast
+chú ý rằng khi dùng covered index, nó là cần thiết để exclude _id field và fetch chỉ các field được indexed
+
+
+
+Ví dụ chỉ lây name của các authors:
+db.authors.find({ name: /in/ }, {name: 1})
+
+
+2, Dùng explain function
+
+> db.authors.find({name: /in/}).explain()
+{
+"cursor" : "BasicCursor",
+"nscanned" : 20004,
+"nscannedObjects" : 20004,
+"n" : 3037,
+"millis" : 30,
+"nYields" : 0,
+"nChunkSkips" : 0,
+"isMultiKey" : false,
+"indexOnly" : false,
+"indexBounds" : {
+}
+}
+
+Câu query được thực hiện trong 30 miliseconds. 
+Thực hiện index name field
+
+db.authors.ensureIndex({name: 1})
+
+Sau đó query lại:
+
+> db.authors.find({name: /in/}).explain()
+{
+"cursor" : "BtreeCursor name_1 multi",
+"nscanned" : 20004,
+"nscannedObjects" : 3037,
+"n" : 3037,
+"millis" : 50,
+"nYields" : 0,
+"nChunkSkips" : 0,
+"isMultiKey" : false,
+"indexOnly" : false,
+"indexBounds" : {
+"name" : [
+
+số lượng object được scan lớn hơn nhiều số lượng object được trả về. đây là kết quả của việc index
+
+3, Dùng covered indexes
+covered indexes có nghĩa là tất cả các fields sẽ được query và được fetch về được đánh index. Trong trường hợp này
+query có performance cực tốt. vì mongodb không search trong các documents mà chỉ trong các index (indexOnly true) nó
+có thể bởi vì tất cả các query fields và fetched field đều được index.
+
+Ví dụ:
+
+indexed query:
+
+db.authors.find({name: /in/}).explain()
+{
+"cursor" : "BtreeCursor name_1 multi",
+"nscanned" : 21695,
+"nscannedObjects" : 3285,
+"n" : 3285,
+"millis" : 248,
+"nYields" : 24,
+"nChunkSkips" : 0,
+"isMultiKey" : false,
+"indexOnly" : false,
+"indexBounds" : {
+"name" : [
+
+
+
+
+- convered indexed query:
+
+> db.authors.find({name: /in/}, {_id:0, name:1}).explain()
+{
+"cursor" : "BtreeCursor name_1 multi",
+"nscanned" : 27420,
+"nscannedObjects" : 4228,
+"n" : 4228,
+"millis" : 81,
+"nYields" : 19,
+"nChunkSkips" : 0,
+"isMultiKey" : false,
+"indexOnly" : true,
+"indexBounds" : {
+"name" : [
+
+
+index query scan 21695 objects và mất 248ms, convered index query scan 27420 object nhưng chỉ mất 81 ms
+
+4, Các kỹ thuật khác 
+
+4.1, Dùng currentOP method để tìm các current queries mà đang trong xử lý
+trong 1 shared environment hoặc dùng replica sets, bật reads on slaves 
+
+4.2 Dùng mongostate
+là 1 tính năng mà in ra trạng thái database trên console mọi second
+
+$$ mongostate -n20
+
+5, Hiểu về web application performance
+
+TĂng hiệu năng của a web app là rất cần thiết. Đây là bởi vì có nhiều tiêu chuẩn để xác định performance. 
+một số param chuẩn được xem xét:
+
+Web server response time
+Throughput
+User satisfaction – Apdex score
+Concurrency – Requests Per Minute (RPM)
+Network latency and end-user response
+
+Đó là 1 số param được dùng để xác đinhj web app performance
+
+thường nếu web server response mà dưới 500ms và end-user response dưới 3 seconds thì app được xem set là good 
+
+6, Web server response time
+
+la thời gian để server response 1 http request
+
+trong rails thì thời gian server response bao gồm thời gian render html và thời gian query trong database.
+khi data càng lớn thì response time cũng càng tăng
+
+7, Throughput (số lượng vật liệu đưa vào quá trình )
+
+số lượng requests mà server có thể thực hiện đồng thời được gọi là concurrent requests. 
+webserver có là multithreaded. nó dùng 1 connection pool. webserver dùng evented I/O
+có 1 threadpool xử lý http request tới webserver. thỉnh thoảng webserver dùng 1 thread pool và 1 database connection
+pool. 
+
+8, end user response and latency
+chỉ dựa trên server response time thôi là chưa đủ. Chúng ta cũng muốn chắc rằng end user web page được refresh đúng thời gian
+cơ  bản thì, end user response dưới 3 seconds là ok
+
+9, Optimizing code cho performance
+
+9.1, indexing fields
+index tăng performance rất nhiều đặc biệt cho reads. Các index được lưu trong binary trees. Nhớ rằng index yêu cầu nhiều 
+không gian tính toán tới 1 sự bổ sung thông tin tới b-tree trong suốt quá trình insert và remove data từ b-tree trong
+suốt quá trình delete. Điều này làm insert và update chậm đi một ít.
+
+Tuy nhiên, trong 1 web app đặc trung luôn có nhiều query get data hơn là update bởi vậy index là hữu ích
+
+chú ý không dùng indexx cho các toán tử write
+
+
+9.2. optimizing data selection
+
+đảm bảo rằng database là không overload, nó available cho nhiều requests. 
+không bao giờ fetch tất cả documents trong 1 collection mà dùng pagination và limit 
+
+khi ứng dụng đã sử dụng lâu dài, data tăng lên. Nếu fetch tất cả fields của 1 document thì sẽ làm giảm performance
+chỉ fetch các fields cần thiết nếu chúng ta không sử dụng cache
+
+Nếu dùng cache thì fetch toàn bộ document
+
+9.3. optimizing và tuning web app stack 
+
+9.4 Cache các objects 
+
+khi chúng ta fetch data từ db, ta có thể lưu nó trong memory một thời gian time to live. trong trường hợp cần fetch
+lại cùng object, thay thế việc phải query từ database, ta đưa nó vào cache. Nó làm tăng performance. Memory đọc nhanh hơn đọc trong database (là disk i/o). 
+
+Khi có 1 caching layer, cách data được fetch:
+- tìm cache cho object
+- Nếu thấy, return nó
+- Nếu ko, tìm trong db
+- lưu nó tới cache và return nó
+
+Nhớ rằng nên fetch toàn bộ document từ db khi cache chúng
+
+9.4.1. Memcache
+
+9.4.2. Redis
+
+

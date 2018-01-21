@@ -1,0 +1,113 @@
+1, dùng  gem 'spork' để tăng speed của rspec
+
+2, relations:
+
+has_many :books, autosave: true, dependent: :destroy
+has_one :address, as: :location, autosave: true, dependent: :destroy
+accepts_nested_attributes_for :books, :address, allow_destroy: true
+
+autosave : option này được xác định trong parent model cho phép associated child object được save cùng với parent
+as: option này là polymorphic relation
+
+3, rails performace típ
+
+Tips to ensure higher efficiency and productivity in your code
+  Try never to fetch too much data in your Controller's instance
+variables. If there are 100,000 objects fetched from the database,
+not only is it heavy on memory but also it would mean we have to
+copy these 100,000 objects into the View, which can be expensive.
+Use pagination!
+
+  Don't keep unnecessary instance variables in the Controller. Create
+only those instance variables that will be accessed in the Views.
+
+  Ensure that models are not accessed from the Views.
+Understandably, this will reduce efficiency because data access
+from the Views means database I/O!
+
+3, Haml
+
+http://haml-lang.com
+
+
+4, Test
+
+group :development, :test do
+  # Call 'byebug' anywhere in the code to stop execution and get a debugger console
+  gem 'byebug', platforms: [:mri, :mingw, :x64_mingw]
+  # Adds support for Capybara system testing and selenium driver
+  gem 'capybara', '~> 2.13'
+  gem 'selenium-webdriver'
+
+  gem 'rspec-rails'
+
+  gem 'faker'
+
+  gem 'spork'
+end
+
+rails generate rspec:install
+
+
+require 'rails_helper'
+
+RSpec.describe Author, :type => :model do
+  it "should be created if name is provided" do
+    # Author.create(name: "test").should be_valid
+    expect(Author.new(name: 'test')).to be_valid
+  end
+  it "should not be created without a name" do
+  # Author.create.should_not be_valid
+  end
+end
+
+5, speed up rspec with gem 'spork'
+
+gem 'spork'
+
+spork –-bootstrap
+
+6, Documenting code using YARD
+
+gem install yard
+
+##
+# This class defines the details of a Book.
+#
+
+class Book
+  include Mongoid::Document
+
+  # @return [String] The title of the book
+  field :title, type: String
+
+  # @return [String] The publisher of the book
+  field :publisher, type: String
+  field :published_on, type: Date
+
+  # @return [Array] An array of votes in the format that we can identify
+  #         upvotes and downvotes! Hence each element of the array
+  field :votes, type: Array
+
+  field :rank, type: Integer
+
+  # @return [String] The price of the book is a localized string
+  #         Depending on the locale, the prices are updated as
+  #         per their currency rate.
+  field :price, localize: true
+
+  validates_presence_of :title
+
+  belongs_to :author
+  has_and_belongs_to_many :categories
+  has_one :book_detail
+
+  embeds_many :reviews
+  field :review_list, type: Hash
+  index publisher: 1
+end
+
+
+yard doc
+
+Câu lệnh này sinh ra thư mục doc chứa các file html là document của code 
